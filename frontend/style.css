@@ -1,0 +1,283 @@
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #1a1a1c;
+  color: #d4d4d4;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: 14px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#titlebar {
+  height: 26px;
+  background: #111;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+#title-text {
+  color: #fff;
+  font-size: 13px;
+}
+
+#editor-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+#editor {
+  flex: 1;
+  background: #1a1a1c;
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 16px;
+  line-height: 1.4;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 10px;
+  tab-size: 4;
+}
+
+#editor::selection {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#editor::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+#editor::-webkit-scrollbar-track {
+  background: #1a1a1c;
+}
+
+#editor::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 5px;
+}
+
+#editor::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#statusbar {
+  height: 26px;
+  background: #111;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+#modified-icon {
+  width: 16px;
+  color: #777;
+  font-size: 13px;
+  text-align: center;
+}
+
+#shortcuts-text {
+  flex: 1;
+  color: #777;
+  font-size: 13px;
+}
+
+#clock {
+  color: #777;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: #1a1a1c;
+  border: 1px solid #333;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.pw-content {
+  width: 200px;
+  padding: 8px 10px;
+}
+
+.pw-title {
+  color: #fff;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.pw-sep {
+  border: none;
+  border-top: 1px solid #333;
+  margin: 4px 0;
+}
+
+.pw-label {
+  display: block;
+  color: #fff;
+  font-size: 13px;
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+.pw-input {
+  width: 100%;
+  background: #2b2b2b;
+  color: #fff;
+  border: 1px solid #3c3c3c;
+  padding: 3px 5px;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pw-input:focus {
+  border-color: #555;
+}
+
+.pw-password {
+  -webkit-text-security: disc;
+}
+
+.calc-content {
+  width: 240px;
+  padding: 8px;
+}
+
+.calc-title {
+  color: #fff;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.calc-input-wrap {
+  background: #2b2b2b;
+  margin-bottom: 6px;
+  padding: 4px 6px;
+  min-height: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.calc-input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 16px;
+  width: 100%;
+  outline: none;
+  text-align: right;
+}
+
+.calc-result {
+  color: #888;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  text-align: right;
+  min-height: 16px;
+}
+
+.calc-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.calc-buttons button {
+  background: #3c3c3c;
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  height: 42px;
+  cursor: pointer;
+  border-radius: 50%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.calc-buttons button:hover {
+  background: #4a4a4a;
+}
+
+.calc-buttons button:active {
+  background: #555;
+}
+
+.calc-eq {
+  width: 100%;
+  background: #3c3c3c;
+  color: #fff;
+  border: none;
+  padding: 0;
+  font-size: 16px;
+  height: 38px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.calc-eq:hover {
+  background: #4a4a4a;
+}
+
+.calc-eq:active {
+  background: #555;
+}
+
+#loading-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+#loading-overlay.hidden {
+  display: none;
+}
+
+#loading-text {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 500;
+}

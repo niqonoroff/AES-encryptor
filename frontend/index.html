@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NQ Editor</title>
+  <style>body{background:#1a1a1c;margin:0}</style>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="titlebar">
+    <span id="title-text">NQ Editor</span>
+  </div>
+
+  <div id="editor-container">
+    <textarea id="editor" spellcheck="false"></textarea>
+  </div>
+
+  <div id="statusbar">
+    <span id="modified-icon"></span>
+    <span id="shortcuts-text"></span>
+    <span id="clock"></span>
+  </div>
+
+  <div id="calc-modal" class="modal hidden">
+    <div class="modal-content calc-content">
+      <div class="calc-title" id="calc-title">Calculator</div>
+      <div class="calc-input-wrap">
+        <input type="text" id="calc-input" class="calc-input" readonly>
+        <div id="calc-result" class="calc-result"></div>
+      </div>
+      <div class="calc-buttons" id="calc-buttons"></div>
+      <button class="calc-eq" id="calc-eq">=</button>
+    </div>
+  </div>
+
+  <div id="open-modal" class="modal hidden">
+    <div class="modal-content pw-content">
+      <div class="pw-title" id="open-title">Open Settings</div>
+      <hr class="pw-sep">
+      <label class="pw-label" id="open-pw-label">Enter password:</label>
+      <input type="password" id="open-password" class="pw-input pw-password">
+      <label class="pw-label" id="open-time-label">Argon time:</label>
+      <input type="text" id="open-time" class="pw-input">
+      <label class="pw-label" id="open-mem-label">Argon memory:</label>
+      <input type="text" id="open-mem" class="pw-input">
+      <label class="pw-label" id="open-par-label">Argon parallelism:</label>
+      <input type="text" id="open-par" class="pw-input">
+      <label class="pw-label" id="open-salt-label">Salt size (bytes):</label>
+      <input type="text" id="open-salt" class="pw-input">
+      <label class="pw-label" id="open-nonce-label">Nonce size (bytes):</label>
+      <input type="text" id="open-nonce" class="pw-input">
+    </div>
+  </div>
+
+  <div id="save-modal" class="modal hidden">
+    <div class="modal-content pw-content">
+      <div class="pw-title" id="save-title">Save Settings</div>
+      <hr class="pw-sep">
+      <label class="pw-label" id="save-new-label">New password:</label>
+      <input type="password" id="save-password" class="pw-input pw-password">
+      <label class="pw-label" id="save-confirm-label">Confirm password:</label>
+      <input type="password" id="save-confirm" class="pw-input pw-password">
+      <label class="pw-label" id="save-time-label">Argon time:</label>
+      <input type="text" id="save-time" class="pw-input">
+      <label class="pw-label" id="save-mem-label">Argon memory:</label>
+      <input type="text" id="save-mem" class="pw-input">
+      <label class="pw-label" id="save-par-label">Argon parallelism:</label>
+      <input type="text" id="save-par" class="pw-input">
+      <label class="pw-label" id="save-salt-label">Salt size (bytes):</label>
+      <input type="text" id="save-salt" class="pw-input">
+      <label class="pw-label" id="save-nonce-label">Nonce size (bytes):</label>
+      <input type="text" id="save-nonce" class="pw-input">
+    </div>
+  </div>
+
+  <div id="loading-overlay" class="hidden">
+    <div id="loading-text">Loading...</div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
