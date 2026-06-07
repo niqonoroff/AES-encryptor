@@ -27,6 +27,7 @@ pub fn run() {
             commands::write_raw,
             commands::read_file_path,
             commands::read_pending_file,
+            commands::pick_and_read_any_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

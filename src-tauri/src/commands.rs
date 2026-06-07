@@ -7,7 +7,7 @@ use crate::crypto;
 pub(crate) static PENDING_FILE: Mutex<Option<String>> = Mutex::new(None);
 
 #[tauri::command]
-pub fn encrypt_text(
+pub async fn encrypt_text(
     text: String,
     password: String,
     argon_time: u32,
@@ -16,27 +16,33 @@ pub fn encrypt_text(
     salt_size: u32,
     nonce_size: u32,
 ) -> String {
-    let encrypted = crypto::encrypt(
-        &text, &password,
-        argon_time, argon_memory, argon_parallel,
-        salt_size as usize, nonce_size as usize,
-    );
-    base64::engine::general_purpose::STANDARD.encode(&encrypted)
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let encrypted = crypto::encrypt(
+            &text, &password,
+            argon_time, argon_memory, argon_parallel,
+            salt_size as usize, nonce_size as usize,
+        );
+        base64::engine::general_purpose::STANDARD.encode(&encrypted)
+    }).await.unwrap();
+    result
 }
 
 #[tauri::command]
-pub fn decrypt_data(
+pub async fn decrypt_data(
     data_b64: String, password: String,
     argon_time: u32, argon_memory: u32, argon_parallel: u32,
     salt_size: u32, nonce_size: u32,
 ) -> Result<String, String> {
     let data = base64::engine::general_purpose::STANDARD
         .decode(&data_b64).map_err(|e| format!("Base64 error: {}", e))?;
-    crypto::decrypt(
-        &data, &password,
-        argon_time, argon_memory, argon_parallel,
-        salt_size as usize, nonce_size as usize,
-    )
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crypto::decrypt(
+            &data, &password,
+            argon_time, argon_memory, argon_parallel,
+            salt_size as usize, nonce_size as usize,
+        )
+    }).await.unwrap();
+    result
 }
 
 #[tauri::command]
@@ -120,6 +126,17 @@ pub fn close_window(window: tauri::Window) {
 pub fn toggle_fullscreen(window: tauri::Window) {
     let fs = window.is_fullscreen().unwrap_or(false);
     let _ = window.set_fullscreen(!fs);
+}
+
+#[tauri::command]
+pub fn pick_and_read_any_file() -> Result<(String, String), String> {
+    let path = rfd::FileDialog::new()
+        .set_title("Select File to Encrypt")
+        .pick_file()
+        .ok_or_else(|| "Cancelled".to_string())?;
+    let data = std::fs::read(&path).map_err(|e| format!("Read error: {}", e))?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+    Ok((path.to_string_lossy().to_string(), b64))
 }
 
 #[tauri::command]

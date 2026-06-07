@@ -129,6 +129,7 @@
   function showLoading() {
     loadingText.textContent = lang === 'ru' ? 'Загрузка...' : 'Loading...';
     loadingOverlay.classList.remove('hidden');
+    void loadingOverlay.offsetHeight;
   }
 
   function hideLoading() {
@@ -242,7 +243,7 @@
     const nonce = parseInt(document.getElementById('open-nonce').value) || DEFAULT.nonce_size;
 
     showLoading();
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => requestAnimationFrame(r));
     let text;
     try {
       text = await invoke('decrypt_data', {
@@ -334,7 +335,7 @@
     const plainText = isFile ? pendingMeta : editor.value;
 
     showLoading();
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise(r => requestAnimationFrame(r));
     try {
       const encryptedB64 = await invoke('encrypt_text', {
         text: plainText,
@@ -437,19 +438,21 @@
   }
 
   async function encryptFile() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.onchange = async () => {
-      const file = input.files[0];
-      if (!file) return;
-      const name = file.name;
+    try {
+      const result = await invoke('pick_and_read_any_file');
+      const [path, fileB64] = result;
+      const name = fileName(path);
       const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-      const fileB64 = await readFileAsBase64(file);
       const meta = JSON.stringify({ name, ext, data: fileB64 });
       pendingMeta = meta;
       openSaveModal();
-    };
-    input.click();
+    } catch (e) {
+      if (e !== 'Cancelled') {
+        editor.value = t('errorRead') + ' ' + (e?.toString() || '');
+        savedText = editor.value;
+        updateUI();
+      }
+    }
   }
 
   async function decryptFile() {
