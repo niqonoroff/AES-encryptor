@@ -12,7 +12,7 @@ Encryption of other binary files (not text) occurs along the chain: Binary -> Ba
 
 Rewritten from Python (Tkinter) to Rust (Tauri) using AI (OpenCode) with backward compatibility. This made the application fast and smooth for processing large amounts of text (important for Base64 strings).
 
-![image alt](https://github.com/niqonoroff/aes-secure-text-editor/blob/main/screenshot.png?raw=true)
+![image alt](https://github.com/niqonoroff/AES-encryptor/blob/main/screenshot.png?raw=true)
 
 ## ✨ Features
 
