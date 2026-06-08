@@ -8,9 +8,9 @@ A text editor with **encryption**.
 
 It can be used as a **text editor** with text encryption (Ctrl+S) and as an **encryptor** of any other files (F5, F6): texts, images, archives, music. Everything is saved in the `.nqtxt` format with password protection AES-256-GCM + Argon2id.
 
-Encryption of any file (text or binary) is performed on **raw bytes** — no Base64 conversion, no intermediate text layer. Large files are processed in 4 MB chunks with parallel decryption/encryption across CPU cores (via `rayon`).
+Encryption of any file (text or binary) is performed on **raw bytes**. Large files are processed in 4 MB chunks with parallel decryption/encryption across CPU cores (via `rayon`).
 
-Rewritten from Python (Tkinter) to Rust (Tauri) using AI (OpenCode) for performance and a clean architecture. The original Python/Tkinter prototype and the Rust rewrite remain in the project history as a story of the evolution from prototype to native desktop app.
+Rewritten from Python (Tkinter) to Rust (Tauri) using AI (OpenCode) for performance and a clean architecture.
 
 ![image alt](https://github.com/niqonoroff/AES-encryptor/blob/main/screenshot.png?raw=true)
 
@@ -21,11 +21,11 @@ Rewritten from Python (Tkinter) to Rust (Tauri) using AI (OpenCode) for performa
 * **Argon2id** key derivation (configurable time/memory/parallelism)
 * **Raw-byte encryption** — no Base64 overhead, no intermediate text layer
 * **Chunked mode** — 4 MB chunks, parallel processing across CPU cores via `rayon`
-* **Dark and light themes** — soft sakura pink panels + warm beige editor in light mode (F3)
-* **Language toggle** RU/EN (F2)
 * **Fullscreen mode** (F1)
+* **Language toggle** RU/EN (F2)
+* **Dark and light themes** — soft sakura pink panels + warm beige editor in light mode (F3)
 * **Built-in calculator** (F4) with safe expression parser (no `eval`)
-* **Tray icon** — app minimizes to tray on close; click the tray icon to paste clipboard contents
+* **Tray icon** — app minimizes to tray on close; click the tray icon to open the editor or paste clipboard contents
 * **Autostart to tray** — when enabled, app starts hidden in system tray at boot (no window)
 * **Font zoom** `Ctrl + Scroll`
 
@@ -73,23 +73,23 @@ Output: `src-tauri/target/release/nq-editor.exe`
 
 Может использоваться как **текстовый редактор** с шифрованием текста (Ctrl+S) и как **шифровальщик** любых других файлов (F5, F6): текстов, изображений, архивов, музыки. Всё сохраняется в формате `.nqtxt` с парольной защитой AES-256-GCM + Argon2id.
 
-Шифрование любого файла (текст или бинарник) выполняется над **сырыми байтами** — без конвертации в Base64, без промежуточного текстового слоя. Большие файлы обрабатываются чанками по 4 МБ с параллельным шифрованием/дешифрованием по ядрам процессора (через `rayon`).
+Шифрование любого файла (текст или бинарник) выполняется над **сырыми байтами**. Большие файлы обрабатываются чанками по 4 МБ с параллельным шифрованием/дешифрованием по ядрам процессора (через `rayon`).
 
-Переписан с Python (Tkinter) на Rust (Tauri) с помощью ИИ (OpenCode) ради скорости и чистой архитектуры. Оригинальный прототип на Python/Tkinter и его переписывание на Rust остаются в истории проекта как путь эволюции от прототипа к нативному десктопному приложению.
+Переписан с Python (Tkinter) на Rust (Tauri) с помощью ИИ (OpenCode). Это позволило добиться высокой производительности при работе с большими файлами.
 
 ## ✨ Возможности
 
 * **Универсальное шифрование** — зашифровать любой файл (F5), расшифровать обратно (F6)
 * **AES-256-GCM** со случайной солью и nonce
 * **Argon2id** (настраиваемые время/память/параллелизм)
-* **Шифрование сырых байт** — без Base64, без промежуточного текстового слоя
+* **Шифрование сырых байтов** — без Base64, без промежуточного текстового слоя
 * **Чанковый режим** — 4 МБ чанки, параллельная обработка по ядрам CPU через `rayon`
-* **Тёмная и светлая темы** — нежные sakura pink панели + тёплый бежевый редактор в светлой (F3)
-* **Переключение языка** RU/EN (F2)
 * **Полноэкранный режим** (F1)
+* **Переключение языка** RU/EN (F2)
+* **Тёмная и светлая темы** — нежные sakura pink панели + тёплый бежевый редактор (F3)
 * **Встроенный калькулятор** (F4) с безопасным парсером выражений (без `eval`)
-* **Иконка в трее** — приложение сворачивается в трей; клик по иконке вставляет буфер обмена
-* **Автозагрузка в трей** — при включении автозапуска при старте системы окно скрыто, только иконка в трее
+* **Иконка в трее** — приложение сворачивается в трей для быстрого открытия редактора и буфера обмена
+* **Автозагрузка в трей** — ускоряет запуск приложения
 * **Масштабирование шрифта** `Ctrl + Scroll`
 
 ## 🗂 Формат файла
@@ -102,7 +102,7 @@ NQ02 | salt 32B | nonce 12B | meta_len 4B (LE) | meta (utf8 JSON) | chunk1 || ch
 
 По умолчанию: Argon2id `time=8, mem=512MB, parallel=4`.
 
-Полезная нагрузка шифрования — JSON метаданных, за которым идут байты файла. Метаданные защищены AEAD-тегом, поэтому любая подмена ломает дешифровку.
+Полезная нагрузка шифрования состоит из JSON-метаданных, за которыми следуют байты файла. Метаданные защищены AEAD‑тегом: любая подмена приведёт к ошибке при дешифровке.
 
 ## 🔧 Сборка
 
