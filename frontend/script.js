@@ -13,12 +13,20 @@
       nonceSize: 'Размер nonce:',
       calculator: 'Калькулятор',
       invalidPassword: 'Неверный пароль | Неверный формат | Файл повреждён',
+      notATextFile: 'Файл не является текстовым (используйте F6 для расшифровки)',
       errorRead: 'Ошибка чтения файла',
       errorSave: 'Ошибка сохранения: ',
-      version: 'v1.2.0',
-      shortcuts: '| Ctrl+O — Открыть | Ctrl+S — Сохранить | Ctrl+Q — Закрыть | F1 — Язык | F2 — Экран | F3 — Калькулятор | F5 — Зашифровать файл | F6 — Расшифровать файл',
+      version: 'v2.0.0',
+      shortcuts: '| Ctrl+O — Открыть | Ctrl+S — Сохранить | Ctrl+Q — Закрыть | F1 — Экран | F2 — Язык | F3 — Тема | F4 — Калькулятор | F5 — Зашифровать файл | F6 — Расшифровать файл',
       nqEditor: 'NQ Editor',
-      saved: 'Сохранено'
+      saved: 'Сохранено',
+      decrypted: 'Расшифровано',
+      closeTitle: 'Несохранённые изменения',
+      closeMessage: 'Закрыть программу без сохранения?',
+      discMessage: 'Открыть буфер обмена без сохранения текущего документа?',
+      cancel: 'Отмена',
+      closeApp: 'Закрыть',
+      isTextFileDecrypt: 'Это текстовый файл. Используйте Ctrl+O (Ctrl+S для сохранения) для работы с ним, а не F6.'
     },
     en: {
       openSettings: 'Open Settings',
@@ -33,21 +41,27 @@
       nonceSize: 'Nonce size (bytes):',
       calculator: 'Calculator',
       invalidPassword: 'Invalid password | Invalid file format | Corrupted file',
+      notATextFile: 'File is not text (use F6 to decrypt)',
       errorRead: 'Error reading file',
       errorSave: 'Error saving file: ',
-      version: 'v1.2.0',
-      shortcuts: '| Ctrl+O — Open | Ctrl+S — Save | Ctrl+Q — Close | F1 — Lang | F2 — Fullscreen | F3 — Calc | F5 — Encrypt file | F6 — Decrypt file',
+      version: 'v2.0.0',
+      shortcuts: '| Ctrl+O — Open | Ctrl+S — Save | Ctrl+Q — Close | F1 — Fullscreen | F2 — Lang | F3 — Theme | F4 — Calc | F5 — Encrypt file | F6 — Decrypt file',
       nqEditor: 'NQ Editor',
-      saved: 'Saved'
+      saved: 'Saved',
+      decrypted: 'Decrypted',
+      closeTitle: 'Unsaved changes',
+      closeMessage: 'Close without saving?',
+      discMessage: 'Open buffer without saving current document?',
+      cancel: 'Cancel',
+      closeApp: 'Close',
+      isTextFileDecrypt: 'This is a text file. Use Ctrl+O (Ctrl+S to save) to edit it, not F6.'
     }
   };
 
   const DEFAULT = {
     argon_time: 8,
     argon_memory: 512 * 1024,
-    argon_parallel: 4,
-    salt_size: 32,
-    nonce_size: 12
+    argon_parallel: 4
   };
 
   const editor = document.getElementById('editor');
@@ -55,6 +69,7 @@
   const modifiedIcon = document.getElementById('modified-icon');
   const shortcutsText = document.getElementById('shortcuts-text');
   const clock = document.getElementById('clock');
+  const themeIcon = document.getElementById('theme-icon');
   const calcModal = document.getElementById('calc-modal');
   const calcInput = document.getElementById('calc-input');
   const calcResult = document.getElementById('calc-result');
@@ -66,23 +81,22 @@
   const loadingText = document.getElementById('loading-text');
 
   let lang = 'ru';
+  let theme = 'dark';
   let currentFile = null;
   let savedText = '';
   let fontSize = 16;
   let calcOpen = false;
   let calcExpr = '';
-  let pendingOpenData = null;
   let pendingOpenPath = null;
-  let pendingMeta = null;
-  let pendingIsFile = false;
+  let pendingInput = null;
+  let openMode = 'text';
 
   const TAURI = window.__TAURI__;
   const INV = TAURI && TAURI.core ? TAURI.core : TAURI;
 
   async function invoke(cmd, args) {
-    if (!INV) throw new Error('Tauri IPC not available');
-    if (INV.invoke) return await INV.invoke(cmd, args);
-    throw new Error('Tauri invoke not found');
+    if (!INV || !INV.invoke) throw new Error('Tauri IPC not available');
+    return await INV.invoke(cmd, args);
   }
 
   function t(key) { return L[lang][key]; }
@@ -104,6 +118,8 @@
     const time = new Date().toTimeString().slice(0, 8);
     clock.textContent = time + ' | ' + t('version');
 
+    themeIcon.textContent = theme === 'dark' ? '☾' : '☀';
+
     document.getElementById('calc-title').textContent = t('calculator');
     document.getElementById('open-title').textContent = t('openSettings');
     document.getElementById('open-pw-label').textContent = t('enterPassword');
@@ -120,6 +136,10 @@
     document.getElementById('save-par-label').textContent = t('argonParallel');
     document.getElementById('save-salt-label').textContent = t('saltSize');
     document.getElementById('save-nonce-label').textContent = t('nonceSize');
+  }
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = theme;
   }
 
   function applyFontSize() {
@@ -162,14 +182,81 @@
   buildCalculator();
 
   function calcEval(expr) {
-    const s = expr.replace(/%/g, '/100.0').replace(/\s/g, '');
-    try {
-      const result = Function('"use strict"; return (' + s + ')')();
-      if (!isFinite(result)) return 'Error';
-      return String(result);
-    } catch (e) {
-      return 'Error';
+    const tokens = [];
+    let i = 0;
+    while (i < expr.length) {
+      const c = expr[i];
+      if (c === ' ') { i++; continue; }
+      if (/[0-9.]/.test(c)) {
+        let j = i;
+        let dots = 0;
+        while (j < expr.length && /[0-9.]/.test(expr[j])) {
+          if (expr[j] === '.') dots++;
+          j++;
+        }
+        if (dots > 1) return 'Error';
+        const num = parseFloat(expr.slice(i, j));
+        if (isNaN(num)) return 'Error';
+        tokens.push({ type: 'num', value: num });
+        i = j;
+      } else if ('+-*/%()'.includes(c)) {
+        tokens.push({ type: 'op', value: c });
+        i++;
+      } else {
+        return 'Error';
+      }
     }
+
+    const prec = { '+': 1, '-': 1, '*': 2, '/': 2, '%': 2 };
+    const output = [];
+    const ops = [];
+    for (const tok of tokens) {
+      if (tok.type === 'num') {
+        output.push(tok);
+      } else if (tok.value === '(') {
+        ops.push(tok);
+      } else if (tok.value === ')') {
+        while (ops.length && ops[ops.length - 1].value !== '(') {
+          output.push(ops.pop());
+        }
+        if (!ops.length) return 'Error';
+        ops.pop();
+      } else {
+        while (ops.length && ops[ops.length - 1].value !== '('
+               && prec[ops[ops.length - 1].value] >= prec[tok.value]) {
+          output.push(ops.pop());
+        }
+        ops.push(tok);
+      }
+    }
+    while (ops.length) {
+      const op = ops.pop();
+      if (op.value === '(' || op.value === ')') return 'Error';
+      output.push(op);
+    }
+
+    const stack = [];
+    for (const tok of output) {
+      if (tok.type === 'num') {
+        stack.push(tok.value);
+      } else {
+        if (stack.length < 2) return 'Error';
+        const b = stack.pop();
+        const a = stack.pop();
+        let r;
+        switch (tok.value) {
+          case '+': r = a + b; break;
+          case '-': r = a - b; break;
+          case '*': r = a * b; break;
+          case '/': r = a / b; break;
+          case '%': r = a % b; break;
+        }
+        if (!isFinite(r)) return 'Error';
+        stack.push(r);
+      }
+    }
+    if (stack.length !== 1) return 'Error';
+    return String(stack[0]);
   }
 
   function calcHandleInput(val) {
@@ -201,15 +288,13 @@
 
   calcEq.addEventListener('click', calcEvalAndSet);
 
-  function openOpenModal(data_b64, path) {
-    pendingOpenData = data_b64;
-    pendingOpenPath = path;
+  function openOpenModal() {
     document.getElementById('open-password').value = '';
     document.getElementById('open-time').value = String(DEFAULT.argon_time);
     document.getElementById('open-mem').value = String(DEFAULT.argon_memory);
     document.getElementById('open-par').value = String(DEFAULT.argon_parallel);
-    document.getElementById('open-salt').value = String(DEFAULT.salt_size);
-    document.getElementById('open-nonce').value = String(DEFAULT.nonce_size);
+    document.getElementById('open-salt').value = '32';
+    document.getElementById('open-nonce').value = '12';
     openModal.classList.remove('hidden');
     document.getElementById('open-password').focus();
   }
@@ -220,8 +305,8 @@
     document.getElementById('save-time').value = String(DEFAULT.argon_time);
     document.getElementById('save-mem').value = String(DEFAULT.argon_memory);
     document.getElementById('save-par').value = String(DEFAULT.argon_parallel);
-    document.getElementById('save-salt').value = String(DEFAULT.salt_size);
-    document.getElementById('save-nonce').value = String(DEFAULT.nonce_size);
+    document.getElementById('save-salt').value = '32';
+    document.getElementById('save-nonce').value = '12';
     saveModal.classList.remove('hidden');
     document.getElementById('save-password').focus();
   }
@@ -233,89 +318,114 @@
     calcOpen = false;
   }
 
+  let closeConfirmOpen = false;
+
+  function showCloseConfirm(msgKey, titleKey) {
+    if (closeConfirmOpen) return Promise.resolve(false);
+    closeConfirmOpen = true;
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal';
+      overlay.innerHTML =
+        '<div class="modal-content pw-content">' +
+          '<div class="pw-title"></div>' +
+          '<hr class="pw-sep">' +
+          '<div class="close-msg"></div>' +
+          '<div class="close-buttons">' +
+            '<button class="calc-eq close-btn-cancel"></button>' +
+            '<button class="calc-eq close-btn-ok"></button>' +
+          '</div>' +
+        '</div>';
+
+      const title = overlay.querySelector('.pw-title');
+      const msg = overlay.querySelector('.close-msg');
+      const cancelBtn = overlay.querySelector('.close-btn-cancel');
+      const okBtn = overlay.querySelector('.close-btn-ok');
+      title.textContent = t(titleKey || 'closeTitle');
+      msg.textContent = t(msgKey || 'closeMessage');
+      cancelBtn.textContent = t('cancel');
+      okBtn.textContent = t('closeApp');
+
+      document.body.appendChild(overlay);
+
+      let resolved = false;
+      const cleanup = (result) => {
+        if (resolved) return;
+        resolved = true;
+        closeConfirmOpen = false;
+        document.removeEventListener('keydown', onKey, true);
+        overlay.remove();
+        resolve(result);
+      };
+
+      cancelBtn.onclick = () => cleanup(false);
+      okBtn.onclick = () => cleanup(true);
+      overlay.addEventListener('mousedown', (e) => {
+        if (e.target === overlay) cleanup(false);
+      });
+
+      const onKey = (e) => {
+        if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); cleanup(false); }
+        else if (e.code === 'Enter') { e.preventDefault(); e.stopPropagation(); cleanup(true); }
+      };
+      document.addEventListener('keydown', onKey, true);
+
+      setTimeout(() => cancelBtn.focus(), 0);
+    });
+  }
+
+  function readKdfParams(prefix) {
+    return {
+      time: parseInt(document.getElementById(prefix + '-time').value) || DEFAULT.argon_time,
+      memory: parseInt(document.getElementById(prefix + '-mem').value) || DEFAULT.argon_memory,
+      parallel: parseInt(document.getElementById(prefix + '-par').value) || DEFAULT.argon_parallel
+    };
+  }
+
   async function submitOpen() {
-    if (!pendingOpenData) return;
+    if (!pendingOpenPath) return;
     const password = document.getElementById('open-password').value;
-    const time = parseInt(document.getElementById('open-time').value) || DEFAULT.argon_time;
-    const mem = parseInt(document.getElementById('open-mem').value) || DEFAULT.argon_memory;
-    const par = parseInt(document.getElementById('open-par').value) || DEFAULT.argon_parallel;
-    const salt = parseInt(document.getElementById('open-salt').value) || DEFAULT.salt_size;
-    const nonce = parseInt(document.getElementById('open-nonce').value) || DEFAULT.nonce_size;
+    const { time, memory, parallel } = readKdfParams('open');
 
     showLoading();
     await new Promise(r => requestAnimationFrame(r));
-    let text;
     try {
-      text = await invoke('decrypt_data', {
-        dataB64: pendingOpenData,
-        password,
-        argonTime: time,
-        argonMemory: mem,
-        argonParallel: par,
-        saltSize: salt,
-        nonceSize: nonce
-      });
+      if (openMode === 'binary') {
+        const result = await invoke('decrypt_file_cmd', {
+          input: pendingOpenPath, password,
+          argonTime: time, argonMemory: memory, argonParallel: parallel
+        });
+        currentFile = null;
+        savedText = '';
+        editor.value = t('decrypted') + ': ' + result.outputPath;
+      } else {
+        const text = await invoke('open_text', {
+          path: pendingOpenPath, password,
+          argonTime: time, argonMemory: memory, argonParallel: parallel
+        });
+        currentFile = pendingOpenPath;
+        editor.value = text;
+        savedText = text;
+      }
       hideLoading();
       openModal.classList.add('hidden');
+      updateUI();
     } catch (e) {
       hideLoading();
-      editor.value = t('invalidPassword');
+      const msg = String(e || '');
+      if (msg === 'TEXT_FILE') {
+        editor.value = t('isTextFileDecrypt');
+      } else if (msg.includes('not a text') || msg.includes('not a text document')) {
+        editor.value = t('notATextFile');
+      } else {
+        editor.value = t('invalidPassword');
+      }
       savedText = editor.value;
       currentFile = null;
       openModal.classList.add('hidden');
       updateUI();
-      pendingOpenData = null;
-      pendingOpenPath = null;
-      pendingIsFile = false;
-      return;
     }
-
-    if (pendingIsFile) {
-      let saveData = text, saveExt = 'bin', saveName = 'file.bin';
-      try {
-        const meta = JSON.parse(text);
-        saveData = meta.data || text;
-        saveExt = meta.ext || base64Ext(saveData);
-        saveName = meta.name || ('file.' + saveExt);
-      } catch (_) {
-        saveExt = base64Ext(text);
-        saveName = 'file.' + saveExt;
-      }
-      const savePath = await invoke('pick_save_filter', { ext: saveExt, name: saveName });
-      if (savePath) {
-        const cleanData = saveData.replace(/\s/g, '');
-        try {
-          await invoke('write_file', { path: savePath, dataB64: cleanData });
-          editor.value = t('saved') + ': ' + savePath;
-          savedText = editor.value;
-          updateUI();
-        } catch (e) {
-          try {
-            await invoke('write_raw', { path: savePath, data: text });
-            editor.value = t('saved') + ': ' + savePath;
-            savedText = editor.value;
-            updateUI();
-          } catch (e2) {
-            editor.value = 'Write error: ' + (e2?.toString() || '');
-            savedText = editor.value;
-            updateUI();
-          }
-        }
-      } else {
-        editor.value = text;
-        savedText = text;
-        currentFile = pendingOpenPath;
-        updateUI();
-      }
-    } else {
-      editor.value = text;
-      savedText = text;
-      currentFile = pendingOpenPath;
-      updateUI();
-    }
-    pendingOpenData = null;
     pendingOpenPath = null;
-    pendingIsFile = false;
   }
 
   async function submitSave() {
@@ -325,69 +435,68 @@
       document.getElementById('save-confirm').value = '';
       return;
     }
-    const time = parseInt(document.getElementById('save-time').value) || DEFAULT.argon_time;
-    const mem = parseInt(document.getElementById('save-mem').value) || DEFAULT.argon_memory;
-    const par = parseInt(document.getElementById('save-par').value) || DEFAULT.argon_parallel;
-    const salt = parseInt(document.getElementById('save-salt').value) || DEFAULT.salt_size;
-    const nonce = parseInt(document.getElementById('save-nonce').value) || DEFAULT.nonce_size;
-
-    const isFile = pendingMeta !== null;
-    const plainText = isFile ? pendingMeta : editor.value;
+    const { time, memory, parallel } = readKdfParams('save');
 
     showLoading();
     await new Promise(r => requestAnimationFrame(r));
     try {
-      const encryptedB64 = await invoke('encrypt_text', {
-        text: plainText,
-        password: pw,
-        argonTime: time,
-        argonMemory: mem,
-        argonParallel: par,
-        saltSize: salt,
-        nonceSize: nonce
-      });
-
-      if (!currentFile || isFile) {
-        const path = await invoke('pick_save_file');
-        if (!path) { hideLoading(); return; }
-        currentFile = path;
+      if (openMode === 'binary' && pendingInput) {
+        const base = fileName(pendingInput);
+        const dot = base.lastIndexOf('.');
+        const stem = dot > 0 ? base.slice(0, dot) : base;
+        const out = await invoke('pick_save_nqtxt', { suggested: stem + '.nqtxt' });
+        if (!out) { hideLoading(); pendingInput = null; return; }
+        await invoke('encrypt_file_cmd', {
+          input: pendingInput, output: out, password: pw,
+          argonTime: time, argonMemory: memory, argonParallel: parallel
+        });
+        currentFile = out;
+        editor.value = t('saved') + ': ' + out;
+        savedText = editor.value;
+        pendingInput = null;
+      } else {
+        let out = currentFile;
+        if (!out) {
+          out = await invoke('pick_save_nqtxt', { suggested: 'untitled.nqtxt' });
+          if (!out) { hideLoading(); return; }
+        }
+        await invoke('save_text', {
+          path: out, text: editor.value, password: pw,
+          argonTime: time, argonMemory: memory, argonParallel: parallel
+        });
+        currentFile = out;
+        editor.value = t('saved') + ': ' + out;
+        savedText = editor.value;
       }
-
-      await invoke('write_file', { path: currentFile, dataB64: encryptedB64 });
-      editor.value = t('saved') + ': ' + currentFile;
-      savedText = editor.value;
       hideLoading();
       saveModal.classList.add('hidden');
       updateUI();
-      pendingMeta = null;
     } catch (e) {
       hideLoading();
-      if (!isFile) {
-        editor.value = t('errorSave') + ' ' + (e?.toString() || '');
-        savedText = editor.value;
-      }
-      pendingMeta = null;
+      editor.value = t('errorSave') + ' ' + (e?.toString() || '');
+      savedText = editor.value;
+      updateUI();
     }
   }
 
   async function openFile() {
     try {
-      const result = await invoke('pick_and_read_file');
-      const [path, data_b64] = result;
-      openOpenModal(data_b64, path);
+      const path = await invoke('pick_nqtxt');
+      if (!path) return;
+      pendingOpenPath = path;
+      openMode = 'text';
+      openOpenModal();
     } catch (e) {
-      if (e !== 'Cancelled') {
-        editor.value = t('errorRead') + ' ' + (e?.toString() || '');
-        savedText = editor.value;
-        updateUI();
-      }
+      editor.value = t('errorRead') + ' ' + (e?.toString() || '');
+      savedText = editor.value;
+      updateUI();
     }
   }
 
   async function saveFile() {
     if (!currentFile) {
       try {
-        const path = await invoke('pick_save_file');
+        const path = await invoke('pick_save_nqtxt', { suggested: 'untitled.nqtxt' });
         if (!path) return;
         currentFile = path;
       } catch (e) {
@@ -397,12 +506,8 @@
         return;
       }
     }
+    openMode = 'text';
     openSaveModal();
-  }
-
-  async function saveFileAs() {
-    currentFile = null;
-    await saveFile();
   }
 
   async function closeWindow() {
@@ -413,71 +518,26 @@
     try { await invoke('toggle_fullscreen'); } catch (e) {}
   }
 
-  function base64Ext(b64) {
-    const h = b64.replace(/\s/g, '').slice(0, 8);
-    if (h.startsWith('iVBOR')) return 'png';
-    if (h.startsWith('/9j/') || h.startsWith('/9k=')) return 'jpg';
-    if (h.startsWith('R0lGOD')) return 'gif';
-    if (h.startsWith('UEsDBA')) return 'zip';
-    if (h.startsWith('JVBER')) return 'pdf';
-    return 'bin';
-  }
-
-  function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const bytes = new Uint8Array(reader.result);
-        let bin = '';
-        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-        resolve(btoa(bin));
-      };
-      reader.onerror = () => reject('Read error');
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
-  async function encryptFile() {
+  async function toggleLang() {
+    lang = lang === 'ru' ? 'en' : 'ru';
     try {
-      const result = await invoke('pick_and_read_any_file');
-      const [path, fileB64] = result;
-      const name = fileName(path);
-      const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-      const meta = JSON.stringify({ name, ext, data: fileB64 });
-      pendingMeta = meta;
-      openSaveModal();
-    } catch (e) {
-      if (e !== 'Cancelled') {
-        editor.value = t('errorRead') + ' ' + (e?.toString() || '');
-        savedText = editor.value;
-        updateUI();
-      }
-    }
+      const cfg = JSON.parse(await invoke('load_config'));
+      cfg.lang = lang;
+      await invoke('save_config', { configJson: JSON.stringify(cfg) });
+    } catch (e) {}
+    try { await invoke('update_tray_lang', { lang }); } catch (e) {}
+    updateUI();
   }
 
-  async function decryptFile() {
+  async function toggleTheme() {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    applyTheme();
     try {
-      const result = await invoke('pick_and_read_file');
-      const [path, dataB64] = result;
-      pendingOpenData = dataB64;
-      pendingOpenPath = path;
-      pendingIsFile = true;
-
-      document.getElementById('open-password').value = '';
-      document.getElementById('open-time').value = String(DEFAULT.argon_time);
-      document.getElementById('open-mem').value = String(DEFAULT.argon_memory);
-      document.getElementById('open-par').value = String(DEFAULT.argon_parallel);
-      document.getElementById('open-salt').value = String(DEFAULT.salt_size);
-      document.getElementById('open-nonce').value = String(DEFAULT.nonce_size);
-      openModal.classList.remove('hidden');
-      document.getElementById('open-password').focus();
-    } catch (e) {
-      if (e !== 'Cancelled') {
-        editor.value = t('errorRead') + ' ' + (e?.toString() || '');
-        savedText = editor.value;
-        updateUI();
-      }
-    }
+      const cfg = JSON.parse(await invoke('load_config'));
+      cfg.theme = theme;
+      await invoke('save_config', { configJson: JSON.stringify(cfg) });
+    } catch (e) {}
+    updateUI();
   }
 
   function toggleCalculator() {
@@ -493,20 +553,32 @@
     }
   }
 
-  async function toggleLang() {
-    lang = lang === 'ru' ? 'en' : 'ru';
+  async function encryptFile() {
     try {
-      const cfg = JSON.parse(await invoke('load_config'));
-      cfg.lang = lang;
-      await invoke('save_config', { configJson: JSON.stringify(cfg) });
+      const path = await invoke('pick_any_file');
+      if (!path) return;
+      pendingInput = path;
+      openMode = 'binary';
+      openSaveModal();
     } catch (e) {
-      try {
-        const cfg = JSON.parse(localStorage.getItem('nq-config') || '{}');
-        cfg.lang = lang;
-        localStorage.setItem('nq-config', JSON.stringify(cfg));
-      } catch (e2) {}
+      editor.value = t('errorRead') + ' ' + (e?.toString() || '');
+      savedText = editor.value;
+      updateUI();
     }
-    updateUI();
+  }
+
+  async function decryptFile() {
+    try {
+      const path = await invoke('pick_nqtxt');
+      if (!path) return;
+      pendingOpenPath = path;
+      openMode = 'binary';
+      openOpenModal();
+    } catch (e) {
+      editor.value = t('errorRead') + ' ' + (e?.toString() || '');
+      savedText = editor.value;
+      updateUI();
+    }
   }
 
   document.addEventListener('keydown', (e) => {
@@ -520,7 +592,7 @@
       return;
     }
 
-    if (e.code === 'F3') {
+    if (e.code === 'F4') {
       if (!pwOpen && !pwSave) { toggleCalculator(); e.preventDefault(); }
       return;
     }
@@ -533,25 +605,23 @@
 
     if (hasModal) {
       if (inCalc) {
-        if (/^[0-9.+\-*/().%]$/.test(e.key)) { calcHandleInput(e.key); e.preventDefault(); }
+        if (/^[0-9.+\-*/()%]$/.test(e.key)) { calcHandleInput(e.key); e.preventDefault(); }
         else if (e.key === 'Backspace') { calcHandleInput('<-'); e.preventDefault(); }
       }
       return;
     }
 
     if (e.ctrlKey && e.code === 'KeyO') { e.preventDefault(); openFile(); return; }
-    if (e.ctrlKey && e.code === 'KeyS') {
-      e.preventDefault();
-      if (e.shiftKey) saveFileAs();
-      else saveFile();
-      return;
-    }
+    if (e.ctrlKey && e.code === 'KeyS') { e.preventDefault(); saveFile(); return; }
     if (e.ctrlKey && e.code === 'KeyQ') { e.preventDefault(); closeWindow(); return; }
-    if (e.code === 'F1') { e.preventDefault(); toggleLang(); return; }
-    if (e.code === 'F2') { e.preventDefault(); toggleFullscreen(); return; }
+    if (e.code === 'F1') { e.preventDefault(); toggleFullscreen(); return; }
+    if (e.code === 'F2') { e.preventDefault(); toggleLang(); return; }
+    if (e.code === 'F3') { e.preventDefault(); toggleTheme(); return; }
     if (e.code === 'F5') { e.preventDefault(); encryptFile(); return; }
     if (e.code === 'F6') { e.preventDefault(); decryptFile(); return; }
   });
+
+  themeIcon.addEventListener('click', toggleTheme);
 
   editor.addEventListener('wheel', (e) => {
     if (e.ctrlKey) {
@@ -566,28 +636,110 @@
   setInterval(clockTick, 1000);
 
   async function init() {
-    let loaded = false;
+    let cfg = {};
     try {
-      const cfgStr = await invoke('load_config');
-      const cfg = JSON.parse(cfgStr);
-      if (cfg.lang) { lang = cfg.lang; loaded = true; }
+      cfg = JSON.parse(await invoke('load_config'));
     } catch (e) {}
-    if (!loaded) {
-      try {
-        const ls = JSON.parse(localStorage.getItem('nq-config') || '{}');
-        if (ls.lang) {
-          lang = ls.lang;
-          invoke('save_config', { configJson: JSON.stringify(ls) }).catch(() => {});
-        }
-      } catch (e) {}
-    }
+    if (cfg.lang) lang = cfg.lang;
+    if (cfg.theme) theme = cfg.theme;
+    applyTheme();
     applyFontSize();
     updateUI();
+    try { await invoke('update_tray_lang', { lang }); } catch (e) {}
+
+    try {
+      const win = window.__TAURI__ && window.__TAURI__.window
+        ? window.__TAURI__.window.getCurrentWindow()
+        : null;
+      if (!win) return;
+
+      if (typeof win.onCloseRequested === 'function') {
+        await win.onCloseRequested(async (event) => {
+          event.preventDefault();
+          if (editor.value !== savedText) {
+            const ok = await showCloseConfirm();
+            if (!ok) return;
+          }
+          await win.hide();
+        });
+      }
+
+      if (typeof win.onDragDropEvent === 'function') {
+        await win.onDragDropEvent((event) => {
+          const payload = event.payload;
+          if (payload.type === 'over') {
+            editor.classList.add('drag-over');
+          } else if (payload.type === 'leave') {
+            editor.classList.remove('drag-over');
+          } else if (payload.type === 'drop') {
+            editor.classList.remove('drag-over');
+            const path = payload.paths[0];
+            if (!path) return;
+            if (path.toLowerCase().endsWith('.nqtxt')) {
+              pendingOpenPath = path;
+              openMode = 'text';
+              openOpenModal();
+            } else {
+              pendingInput = path;
+              openMode = 'binary';
+              openSaveModal();
+            }
+          }
+        });
+      }
+
+      if (typeof win.listen === 'function') {
+        await win.listen('encrypt-progress', (event) => {
+          const { status, progress } = event.payload;
+          if (status === 'indeterminate') {
+            win.setProgressBar({ status: 'indeterminate' });
+          } else if (status === 'normal') {
+            win.setProgressBar({ status: 'normal', progress });
+          } else {
+            win.setProgressBar({ status: 'none' });
+          }
+        });
+
+        await win.listen('paste-clipboard', async () => {
+          if (editor.value !== '') {
+            if (!await showCloseConfirm('discMessage')) {
+              return;
+            }
+            editor.value = '';
+            savedText = '';
+            currentFile = null;
+            updateUI();
+          }
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) {
+              const start = editor.selectionStart;
+              const end = editor.selectionEnd;
+              editor.value = editor.value.substring(0, start) + text + editor.value.substring(end);
+              editor.selectionStart = editor.selectionEnd = start + text.length;
+              updateUI();
+            }
+          } catch (e) {}
+        });
+
+        await win.listen('open-file', (event) => {
+          const path = event.payload;
+          if (!path) return;
+          if (path.toLowerCase().endsWith('.nqtxt')) {
+            pendingOpenPath = path;
+            openMode = 'text';
+            openOpenModal();
+          }
+        });
+      }
+    } catch (e) {}
 
     try {
       const pending = await invoke('read_pending_file');
       if (pending) {
-        openOpenModal(pending[1], pending[0]);
+        pendingOpenPath = pending;
+        openMode = 'text';
+        openOpenModal();
       }
     } catch (e) {}
   }
@@ -596,6 +748,7 @@
     init();
   } else {
     lang = (navigator.language || '').startsWith('ru') ? 'ru' : 'en';
+    applyTheme();
     applyFontSize();
     updateUI();
   }
